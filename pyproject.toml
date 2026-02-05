@@ -1,14 +1,12 @@
-[project]
+[tool.poetry]
 name = "password-strength"
 version = "0.1.0"
 description = "A simple password strength checker"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "streamlit",
-    "requests",
-    "re",
-    "string",
-    "math",
-    "random"
-]
+authors = ["Subham"]
+
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+streamlit = "*"
+requests = "*"
