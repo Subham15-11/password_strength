@@ -2,7 +2,9 @@ import re
 import math
 import hashlib
 import requests
-import random
+
+# import random
+import secrets  # for cryptographically secure password generation
 import string
 import streamlit as st
 
@@ -34,6 +36,22 @@ class PasswordChecker:
             return 0
 
         return round(len(self.password) * math.log2(pool), 2)
+
+    def crack_time_estimate(self):
+        guesses_per_sec = 1e9  # 1 billion guesses/sec
+        entropy = self.entropy_score()
+        seconds = 2**entropy / guesses_per_sec
+
+        if seconds < 60:
+            return "Seconds"
+        elif seconds < 3600:
+            return "Minutes"
+        elif seconds < 86400:
+            return "Hours"
+        elif seconds < 31536000:
+            return "Days"
+        else:
+            return "Years+"
 
     # Check password against HIBP database using k-Anonymity model.
     # It is part of the Have I Been Pwned (HIBP) Passwords API, created by Troy Hunt.
@@ -83,17 +101,31 @@ class PasswordChecker:
 
 
 # ---------- Password Generator ----------
-def generate_password(length=12):
+def generate_password(length=14):
     chars = string.ascii_letters + string.digits + "!@#$%^&*"
-    return "".join(random.choice(chars) for _ in range(length))
+    return "".join(secrets.choice(chars) for _ in range(length))
 
 
 # ---------- Streamlit UI ----------
 st.set_page_config(page_title="Password Security Analyzer", page_icon="🔐")
 st.title("🔐 Password Security Analyzer")
 
+
 # ---- Input ----
-password = st.text_input("Enter Password", type="password")
+def on_password_change():
+    st.session_state.live_password = st.session_state.password
+
+
+st.text_input(
+    "Enter Password",
+    type="password",
+    key="password",
+    on_change=on_password_change,  # REAL-TIME
+)
+
+password = st.session_state.get("live_password", "")
+
+
 st.caption("🔒 Your password is never stored & sent directly.")
 
 
@@ -107,29 +139,58 @@ with col2:
     if "generated" in st.session_state:
         st.code(st.session_state.generated)
 
+# ⚠ Reuse Warning (NEW)
+if "generated" in st.session_state and password:
+    if password == st.session_state.generated:
+        st.warning("⚠ You are reusing the generated password")
+
+
 # ---- Strength Check ----
 if password:
     checker = PasswordChecker(password)
     strength, color, checks, breached, count = checker.check_strength()
     entropy = checker.entropy_score()
+    crack_time = checker.crack_time_estimate()
 
     st.markdown(
         f"## Strength: <span style='color:{color}'>{strength}</span>",
         unsafe_allow_html=True,
     )
 
-    st.progress(min(len([v for v in checks.values() if v]) / 7, 1.0))
+    # Progress Bar (Improved)
+    progress = sum(checks.values()) / len(checks)
+    st.progress(progress)
 
+    # ✔ Security Checklist
     st.subheader("✔ Security Checklist")
     for rule, passed in checks.items():
         st.write(("✅" if passed else "❌"), rule)
 
+    # ⏱ Crack Time
+    st.subheader("⏱ Estimated Crack Time")
+    st.write(f"**{crack_time}**")
+
+    # Strength Explanation
+    strength_desc = {
+        "Weak": "❌ Easily guessable. Do NOT use.",
+        "Medium": "⚠️ Acceptable but can be improved.",
+        "Strong": "✅ Secure and recommended.",
+    }
+    st.info(strength_desc[strength])
+
+    # 🔢 Entropy Score
     st.subheader("🔢 Entropy Score")
     st.write(f"**{entropy} bits** (Higher = harder to crack)")
 
+    # 🔓 HIBP Breach Check
     if breached:
         st.error(f"⚠ Found in data breaches **{count} times**")
     else:
         st.success("✅ No breach record found")
 
+# ---------- Footer ----------
 st.divider()
+st.caption("Built with ❤️ using Python & Streamlit")
+
+# End of file
+# https://passwords-strength.streamlit.app/
